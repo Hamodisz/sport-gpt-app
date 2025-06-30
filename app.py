@@ -1,44 +1,21 @@
 import streamlit as st
-import pandas as pd
-from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.feature_extraction.text import CountVectorizer
 import openai
+from deep_translator import GoogleTranslator
+import urllib.parse
+import base64
 
+# إعداد الواجهة
 st.set_page_config(page_title="Find Your Sport", layout="centered")
-
-openai.api_key = st.secrets["OPENAI_API_KEY"]
 
 st.markdown("""
 <h1 style='text-align: center; color: #3F8CFF;'>🏅 Find Your Sport</h1>
-<p style='text-align: center;'>Answer the questions to get a sport tailored to your personality.</p>
+<p style='text-align: center;'>اكتشف رياضتك المثالية حسب شخصيتك</p>
 """, unsafe_allow_html=True)
 
+# تحديد اللغة
 language = st.radio("🌐 Choose your language / اختر لغتك:", ["English", "العربية"])
 
-@st.cache_data
-def load_data():
-    return pd.read_excel("Formatted_Sport_Identity_Data-2.xlsx")
-
-df = load_data()
-df["Combined_Answers"] = df[[f"Q{i}" for i in range(1, 21)]].astype(str).agg(' '.join, axis=1)
-vectorizer = CountVectorizer().fit_transform(df["Combined_Answers"])
-similarity_matrix = cosine_similarity(vectorizer)
-
-def recommend_sport(new_answers):
-    input_str = " ".join(new_answers)
-    input_vec = CountVectorizer().fit(df["Combined_Answers"]).transform([input_str])
-    similarities = cosine_similarity(input_vec, vectorizer).flatten()
-    best_match_idx = similarities.argmax()
-    result = df.iloc[best_match_idx]
-    return {
-        "Personality_Archetype": result["Personality_Archetype"],
-        "Identity_Archetype": result["Identity_Archetype"],
-        "Recommended_Sport_Name": result["Recommended_Sport_Name"],
-        "Sport_Description": result["Sport_Description"],
-        "Environment": result["Environment"],
-        "Tools_Needed": result["Tools_Needed"]
-    }
-
+# أسئلة التشخيص
 questions = {
     "English": [
         "1. Do you prefer to be alone or with people?",
@@ -86,17 +63,43 @@ questions = {
     ]
 }
 
+# استقبال الإجابات
 st.header("✍️ Answer the Questions")
-user_answers = []
-for q in questions[language]:
-    user_answers.append(st.text_input(q))
+answers = [st.text_input(q) for q in questions[language]]
 
-if st.button("🎯 Get Recommendation / احصل على الرياضة الأنسب"):
-    if all(user_answers):
-        answers_en = user_answers if language == "English" else user_answers
-        result = recommend_sport(answers_en)
+# عند الضغط على زر التوصية
+if st.button("🎯 Get Your Sport / احصل على رياضتك"):
+    if all(answers):
+        answers_en = [GoogleTranslator(source='auto', target='en').translate(a) if language == "العربية" else a for a in answers]
         joined = "\n".join([f"Q{i+1}: {a}" for i, a in enumerate(answers_en)])
 
-        st.markdown(f"### 📄 **تشخيصك الرياضي:**\n\n{result}")
+        openai.api_key = st.secrets["OPENAI_API_KEY"]
+
+        prompt = f"""You are a sports innovation AI. Based on the user's personality traits and preferences below, invent a unique sport for them. Include:
+- Personality Archetype
+- Identity Archetype
+- Recommended Sport Name
+- Description
+- Environment
+- Tools Needed
+
+User Answers:
+{joined}
+"""
+
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}]
+        )
+        result = response.choices[0].message.content.strip()
+
+        if language == "العربية":
+            result = GoogleTranslator(source='en', target='ar').translate(result)
+            st.markdown("### ✅ تم التشخيص")
+        else:
+            st.markdown("### ✅ Recommendation Complete")
+
+        st.text_area("📋 Result", result, height=300)
+
     else:
         st.warning("⛔ Please answer all questions. / جاوب على كل الأسئلة من فضلك.")
