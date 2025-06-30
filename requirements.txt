@@ -1,4 +1,3 @@
-scikit-learn
-streamlit
 openai
+streamlit
 deep-translator
