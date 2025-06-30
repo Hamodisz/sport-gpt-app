@@ -2,18 +2,22 @@ import streamlit as st
 import openai
 from deep_translator import GoogleTranslator
 import urllib.parse
-from PIL import Image, ImageDraw, ImageFont
-import io
 import base64
 
+# إعداد صفحة التطبيق
 st.set_page_config(page_title="Find Your Sport", layout="centered")
 openai.api_key = st.secrets["OPENAI_API_KEY"]
 
-# واجهة البداية
-st.markdown("<h1 style='text-align: center; color: #3F8CFF;'>🏅 Find Your Sport</h1>", unsafe_allow_html=True)
+# العنوان
+st.markdown("""
+<h1 style='text-align: center; color: #3F8CFF;'>🏅 Find Your Sport</h1>
+<p style='text-align: center;'>رياضة مصممة لشخصيتك باستخدام الذكاء الاصطناعي</p>
+""", unsafe_allow_html=True)
 
+# اختيار اللغة
 language = st.radio("🌐 اختر لغتك / Choose your language:", ["العربية", "English"])
 
+# الأسئلة
 questions = {
     "English": [
         "1. Do you prefer to be alone or with people?",
@@ -61,56 +65,66 @@ questions = {
     ]
 }
 
+# إدخال الأجوبة
+st.header("✍️ Answer the Questions")
 answers = [st.text_input(q) for q in questions[language]]
 
-def generate_image(text):
-    img = Image.new('RGB', (720, 720), color=(240, 245, 255))
-    draw = ImageDraw.Draw(img)
-    font = ImageFont.load_default()
-    lines = text.split("\n")
-    y = 30
-    for line in lines:
-        draw.text((30, y), line, fill=(0, 0, 0), font=font)
-        y += 25
-    return img
-
-if st.button("🎯 Get Recommendation / احصل على التوصية"):
+# زر التوصية
+if st.button("🎯 احصل على رياضتك"):
     if all(answers):
-        answers_en = [GoogleTranslator(source='auto', target='en').translate(a) if language == "العربية" else a for a in answers]
+        # ترجمة الإجابات
+        answers_en = [
+            GoogleTranslator(source='auto', target='en').translate(ans) if language == "العربية" else ans
+            for ans in answers
+        ]
         formatted = "\n".join([f"Q{i+1}: {a}" for i, a in enumerate(answers_en)])
-        prompt = f"""You are a sports innovation AI. Based on the following personality answers, invent a completely new and unique sport recommendation tailored to this person. Include the following:
-- Personality Archetype
-- Identity Archetype
-- Recommended Sport Name
-- Sport Description
-- Ideal Environment
-- Tools or Gear Needed
+
+        # برومبت GPT
+        prompt = f"""You are a sport innovation expert AI.
+Analyze the user's personality based on the following answers and create a unique sport that matches their identity.
+Return your answer in this format:
+
+Personality_Archetype: ...
+Identity_Archetype: ...
+Recommended_Sport_Name: ...
+Sport_Description: ...
+Environment: ...
+Tools_Needed: ...
 
 Answers:
-{formatted}"""
+{formatted}
+"""
 
+        # الاتصال بـ GPT
         res = openai.ChatCompletion.create(
             model="gpt-4",
             messages=[{"role": "user", "content": prompt}]
         )
-        result = res.choices[0].message.content.strip()
-        translated_result = GoogleTranslator(source='en', target='ar').translate(result) if language == "العربية" else result
-        st.success("✅ التوصية جاهزة")
-        st.markdown(f"### 🧠 التشخيص الرياضي:
+        output = res.choices[0].message.content.strip()
 
-{translated_result}")
-        st.text_area("📋 انسخ نتيجتك", translated_result, height=300)
+        # ترجمة الناتج للعربية إذا لزم
+        translated_output = GoogleTranslator(source='en', target='ar').translate(output) if language == "العربية" else output
 
-        encoded = urllib.parse.quote(translated_result)
-        share_url = f"https://wa.me/?text={encoded}"
-        st.markdown(f"[🔗 مشاركة على واتساب]({share_url})")
+        # عرض التوصية
+        st.success("✅ تم التشخيص")
+        st.markdown(f"### 🧠 تشخيصك الرياضي:
 
-        img = generate_image(translated_result)
-        buf = io.BytesIO()
-        img.save(buf, format="PNG")
-        byte_im = buf.getvalue()
-        b64 = base64.b64encode(byte_im).decode()
-        href = f'<a href="data:image/png;base64,{b64}" download="sport_recommendation.png">📸 تحميل النتيجة كصورة</a>'
-        st.markdown(href, unsafe_allow_html=True)
+```
+{translated_output}
+```")
+
+        # نسخ التوصية
+        st.text_area("📋 انسخ نتيجتك أو احفظها:", translated_output, height=250)
+
+        # مشاركة عبر واتساب
+        share_text = f"شخصيتي الرياضية هي:\n{translated_output}\nجرب تطلع رياضتك! 👇\nhttps://sport-gpt-app.streamlit.app"
+        whatsapp_link = "https://wa.me/?text=" + urllib.parse.quote(share_text)
+        st.markdown(f"[📲 شارك مع صديق على واتساب]({whatsapp_link})", unsafe_allow_html=True)
+
+        # توليد رابط دائم (base64)
+        encoded = base64.urlsafe_b64encode(translated_output.encode()).decode()
+        shareable_link = f"https://sport-gpt-app.streamlit.app/?r={encoded}"
+        st.markdown(f"[🔗 رابط نتيجتك الدائم]({shareable_link})", unsafe_allow_html=True)
+
     else:
-        st.warning("❗ جاوب على كل الأسئلة من فضلك.")
+        st.warning("❗ جاوب على كل الأسئلة قبل الضغط على الزر.")
