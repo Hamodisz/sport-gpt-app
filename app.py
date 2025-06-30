@@ -71,7 +71,8 @@ if st.button("🎯 Get Recommendation / احصل على الرياضة الأن�
             GoogleTranslator(source='auto', target='en').translate(ans) if language == "العربية" else ans
             for ans in user_answers
         ]
-        joined = "\n".join([f"Q{i+1}: {a}" for i, a in enumerate(answers_en)])
+        joined = "
+".join([f"Q{i+1}: {a}" for i, a in enumerate(answers_en)])
 
         prompt = f"""
 You are a sports innovation AI. Based on the user's personality traits and preferences below, invent a unique sport for them. Include:
@@ -96,27 +97,24 @@ User Answers:
         if language == "العربية":
             translated_output = GoogleTranslator(source='en', target='ar').translate(output)
             st.markdown("### ✅ التوصية جاهزة")
-            st.markdown(f"📄 **تشخيصك الرياضي:**\n
+            st.markdown(f"""### 📄 **تشخيصك الرياضي:**
 
-{translated_output}")
+{translated_output}""")
             result_text = translated_output
         else:
             st.markdown("### ✅ Recommendation Ready")
-            st.markdown(f"📄 **Your Sport Diagnosis:**\n
+            st.markdown(f"""### 📄 **Your Sport Diagnosis:**
 
-{output}")
+{output}""")
             result_text = output
 
-        # 🔘 زر نسخ النتيجة
         st.text_area("📋 اضغط و انسخ النتيجة", result_text, height=250)
 
-        # 📥 زر حفظ كـ ملف .txt
         b64 = base64.b64encode(result_text.encode()).decode()
         href = f'<a href="data:application/octet-stream;base64,{b64}" download="sport_recommendation.txt">📄 احفظ النتيجة كملف</a>'
         st.markdown(href, unsafe_allow_html=True)
 
-        # 🔗 مشاركة النتيجة: دعوة صديق يجاوب
-        base_url = "https://sport-gpt-app.streamlit.app"  # <-- عدله إذا عندك رابط مختلف
+        base_url = "https://sport-gpt-app.streamlit.app"
         message = "✨ طلع لي تشخيص رياضي رهيب! جرب تطلع رياضتك 👇"
         encoded_msg = urllib.parse.quote(message + "\n" + base_url)
         share_url = f"https://wa.me/?text={encoded_msg}"
