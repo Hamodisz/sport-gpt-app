@@ -1,19 +1,43 @@
 import streamlit as st
+import pandas as pd
+from sklearn.metrics.pairwise import cosine_similarity
+from sklearn.feature_extraction.text import CountVectorizer
 import openai
-from deep_translator import GoogleTranslator
-import base64
-import urllib.parse
-
-openai.api_key = st.secrets["OPENAI_API_KEY"]
 
 st.set_page_config(page_title="Find Your Sport", layout="centered")
 
+openai.api_key = st.secrets["OPENAI_API_KEY"]
+
 st.markdown("""
 <h1 style='text-align: center; color: #3F8CFF;'>🏅 Find Your Sport</h1>
-<p style='text-align: center;'>A sport tailored to your personality / رياضة تناسب شخصيتك</p>
+<p style='text-align: center;'>Answer the questions to get a sport tailored to your personality.</p>
 """, unsafe_allow_html=True)
 
 language = st.radio("🌐 Choose your language / اختر لغتك:", ["English", "العربية"])
+
+@st.cache_data
+def load_data():
+    return pd.read_excel("Formatted_Sport_Identity_Data-2.xlsx")
+
+df = load_data()
+df["Combined_Answers"] = df[[f"Q{i}" for i in range(1, 21)]].astype(str).agg(' '.join, axis=1)
+vectorizer = CountVectorizer().fit_transform(df["Combined_Answers"])
+similarity_matrix = cosine_similarity(vectorizer)
+
+def recommend_sport(new_answers):
+    input_str = " ".join(new_answers)
+    input_vec = CountVectorizer().fit(df["Combined_Answers"]).transform([input_str])
+    similarities = cosine_similarity(input_vec, vectorizer).flatten()
+    best_match_idx = similarities.argmax()
+    result = df.iloc[best_match_idx]
+    return {
+        "Personality_Archetype": result["Personality_Archetype"],
+        "Identity_Archetype": result["Identity_Archetype"],
+        "Recommended_Sport_Name": result["Recommended_Sport_Name"],
+        "Sport_Description": result["Sport_Description"],
+        "Environment": result["Environment"],
+        "Tools_Needed": result["Tools_Needed"]
+    }
 
 questions = {
     "English": [
@@ -63,62 +87,16 @@ questions = {
 }
 
 st.header("✍️ Answer the Questions")
-user_answers = [st.text_input(q) for q in questions[language]]
+user_answers = []
+for q in questions[language]:
+    user_answers.append(st.text_input(q))
 
 if st.button("🎯 Get Recommendation / احصل على الرياضة الأنسب"):
     if all(user_answers):
-        answers_en = [
-            GoogleTranslator(source='auto', target='en').translate(ans) if language == "العربية" else ans
-            for ans in user_answers
-        ]
-        joined = "
-".join([f"Q{i+1}: {a}" for i, a in enumerate(answers_en)])
+        answers_en = user_answers if language == "English" else user_answers
+        result = recommend_sport(answers_en)
+        joined = "\n".join([f"Q{i+1}: {a}" for i, a in enumerate(answers_en)])
 
-        prompt = f"""
-You are a sports innovation AI. Based on the user's personality traits and preferences below, invent a unique sport for them. Include:
-- Personality Archetype
-- Identity Archetype
-- Recommended Sport Name
-- Description
-- Environment
-- Tools Needed
-
-User Answers:
-{joined}
-"""
-
-        response = openai.ChatCompletion.create(
-            model="gpt-4",
-            messages=[{"role": "user", "content": prompt}]
-        )
-
-        output = response.choices[0].message.content.strip()
-
-        if language == "العربية":
-            translated_output = GoogleTranslator(source='en', target='ar').translate(output)
-            st.markdown("### ✅ التوصية جاهزة")
-            st.markdown(f"""### 📄 **تشخيصك الرياضي:**
-
-{translated_output}""")
-            result_text = translated_output
-        else:
-            st.markdown("### ✅ Recommendation Ready")
-            st.markdown(f"""### 📄 **Your Sport Diagnosis:**
-
-{output}""")
-            result_text = output
-
-        st.text_area("📋 اضغط و انسخ النتيجة", result_text, height=250)
-
-        b64 = base64.b64encode(result_text.encode()).decode()
-        href = f'<a href="data:application/octet-stream;base64,{b64}" download="sport_recommendation.txt">📄 احفظ النتيجة كملف</a>'
-        st.markdown(href, unsafe_allow_html=True)
-
-        base_url = "https://sport-gpt-app.streamlit.app"
-        message = "✨ طلع لي تشخيص رياضي رهيب! جرب تطلع رياضتك 👇"
-        encoded_msg = urllib.parse.quote(message + "\n" + base_url)
-        share_url = f"https://wa.me/?text={encoded_msg}"
-
-        st.markdown(f"[📲 شارك صديقك النتيجة وخلّه يجرب](%s)" % share_url, unsafe_allow_html=True)
+        st.markdown(f"### 📄 **تشخيصك الرياضي:**\n\n{result}")
     else:
         st.warning("⛔ Please answer all questions. / جاوب على كل الأسئلة من فضلك.")
