@@ -1,9 +1,9 @@
-
 import streamlit as st
 import openai
 from deep_translator import GoogleTranslator
+import base64
+import urllib.parse
 
-# إعداد المفتاح من secrets
 openai.api_key = st.secrets["OPENAI_API_KEY"]
 
 st.set_page_config(page_title="Find Your Sport", layout="centered")
@@ -96,9 +96,31 @@ User Answers:
         if language == "العربية":
             translated_output = GoogleTranslator(source='en', target='ar').translate(output)
             st.markdown("### ✅ التوصية جاهزة")
-            st.markdown(translated_output)
+            st.markdown(f"📄 **تشخيصك الرياضي:**\n
+
+{translated_output}")
+            result_text = translated_output
         else:
             st.markdown("### ✅ Recommendation Ready")
-            st.markdown(output)
+            st.markdown(f"📄 **Your Sport Diagnosis:**\n
+
+{output}")
+            result_text = output
+
+        # 🔘 زر نسخ النتيجة
+        st.text_area("📋 اضغط و انسخ النتيجة", result_text, height=250)
+
+        # 📥 زر حفظ كـ ملف .txt
+        b64 = base64.b64encode(result_text.encode()).decode()
+        href = f'<a href="data:application/octet-stream;base64,{b64}" download="sport_recommendation.txt">📄 احفظ النتيجة كملف</a>'
+        st.markdown(href, unsafe_allow_html=True)
+
+        # 🔗 مشاركة النتيجة: دعوة صديق يجاوب
+        base_url = "https://sport-gpt-app.streamlit.app"  # <-- عدله إذا عندك رابط مختلف
+        message = "✨ طلع لي تشخيص رياضي رهيب! جرب تطلع رياضتك 👇"
+        encoded_msg = urllib.parse.quote(message + "\n" + base_url)
+        share_url = f"https://wa.me/?text={encoded_msg}"
+
+        st.markdown(f"[📲 شارك صديقك النتيجة وخلّه يجرب](%s)" % share_url, unsafe_allow_html=True)
     else:
         st.warning("⛔ Please answer all questions. / جاوب على كل الأسئلة من فضلك.")
